@@ -36,7 +36,6 @@ if ($role === "student") {
     $isOwner = true;
 }
 
-// Staff may also view orders in the shared queue? Keep it restricted to owned/admin.
 if (!$isOwner) {
     http_response_code(403);
     exit("Access denied.");
@@ -62,6 +61,9 @@ $meta = [
 
 $service = (string) ($o["service"] ?? "");
 $orderFiles = order_files($o);
+$isFree = !empty($o["is_free"]);
+$payStatus = strtolower((string) ($o["payment_status"] ?? "pending"));
+$emergency = ($o["order_type"] ?? "Normal") === "Emergency";
 $base = "";
 
 if ($role === "staff") {
@@ -89,7 +91,10 @@ $backLink = $role === "staff" ? "staff/orders.php" : ($role === "admin" ? "admin
 <header class="topbar">
   <div class="topbar-title">
     <div class="page-icon"><?= icon("package", "lg") ?></div>
-    <div><h1>Order Tracking</h1><p class="muted">Live status for <?= e($o["order_token"] ?? "") ?></p></div>
+    <div>
+      <h1>Order Tracking</h1>
+      <p class="muted">Live status for <?= e($o["order_token"] ?? "") ?></p>
+    </div>
   </div>
   <div class="avatar"><?= strtoupper(substr($_SESSION["name"] ?? "S", 0, 1)) ?></div>
 </header>
@@ -138,22 +143,49 @@ $backLink = $role === "staff" ? "staff/orders.php" : ($role === "admin" ? "admin
   </div>
 
   <div class="card animate-1">
-    <div class="card-head"><h2>Order details</h2></div>
-    <div class="summary">
-      <div><span>Service</span><b><?= e($service) ?></b></div>
-      <div><span>Pages</span><b><?= (int) ($o["page_count"] ?? 0) ?></b></div>
-      <div><span>Rate per page</span><b>₹<?= number_format((float) ($o["page_rate"] ?? 0), 2) ?></b></div>
-      <div><span>Print side</span><b><?= e($o["print_side"] ?? "Single") ?></b></div>
-      <div><span>Priority</span><b class="<?= ($o["order_type"] ?? "Normal") === "Emergency" ? "priority-emergency" : "priority-normal" ?>"><?= e($o["order_type"] ?? "Normal") ?></b></div>
-      <div><span>Payment</span><span class="<?= strtolower((string) ($o["payment_status"] ?? "")) === "paid" ? "free" : "fee" ?>"><?= e($o["payment_status"] ?? "Pending") ?></span></div>
-      <hr>
-      <div class="total"><b><?= !empty($o["is_free"]) ? "Loyalty free order" : "Total paid" ?></b><strong>₹<?= number_format((float) ($o["amount"] ?? 0), 2) ?></strong></div>
+    <div class="card-head">
+      <h2>Order details</h2>
+      <?php if ($emergency): ?>
+        <span class="tag emergency-tag"><?= icon("alert") ?> Emergency</span>
+      <?php endif; ?>
     </div>
 
-    <?php foreach ($orderFiles as $fi => $of): ?>
-      <?php $ext = strtoupper(pathinfo($of["name"], PATHINFO_EXTENSION)); ?>
-      <a class="btn outline" style="margin:4px 6px 0 0" href="download.php?id=<?= (int) $o["id"] ?>&file=<?= (int) $fi ?>"><?= icon("download") ?> Download <?= e($of["name"] ?: $ext) ?></a>
-    <?php endforeach; ?>
+    <div class="detail-grid">
+      <div class="detail"><span>Service</span><b><?= e($service) ?></b></div>
+      <div class="detail"><span>Pages</span><b><?= (int) ($o["page_count"] ?? 0) ?></b></div>
+      <div class="detail"><span>Rate per page</span><b>₹<?= number_format((float) ($o["page_rate"] ?? 0), 2) ?></b></div>
+      <div class="detail"><span>Print side</span><b><?= e($o["print_side"] ?? "Single") ?></b></div>
+      <div class="detail">
+        <span>Priority</span>
+        <b class="<?= $emergency ? "priority-emergency" : "priority-normal" ?>"><?= e($o["order_type"] ?? "Normal") ?></b>
+      </div>
+      <div class="detail">
+        <span>Payment</span>
+        <b class="<?= $payStatus === "paid" ? "free" : "fee" ?>"><?= e($o["payment_status"] ?? "Pending") ?></b>
+      </div>
+    </div>
+
+    <?php if (count($orderFiles) > 0): ?>
+      <div style="margin-top:24px">
+        <label style="margin-top:0">Documents</label>
+        <div class="order-files">
+          <?php foreach ($orderFiles as $fi => $of): ?>
+            <a class="file-chip" href="download.php?id=<?= (int) $o["id"] ?>&file=<?= (int) $fi ?>" title="Download <?= e($of["name"]) ?>">
+              <?= icon("file-text") ?>
+              <span><?= e($of["name"]) ?></span>
+              <?= icon("download") ?>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <div class="order-total-box">
+      <div class="order-total-row total" style="margin-top:0;border-top:0;padding-top:0">
+        <span><?= $isFree ? "Loyalty free order" : "Total" ?></span>
+        <strong><?= $isFree ? "FREE" : "₹" . number_format((float) ($o["amount"] ?? 0), 2) ?></strong>
+      </div>
+    </div>
   </div>
 </div>
 </main>

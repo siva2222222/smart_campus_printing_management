@@ -345,12 +345,6 @@ $active = "new-order";
 <div class="content">
 
 
-<div
-    class="card form animate"
-    style="max-width:640px;margin:0"
->
-
-
 <?php if ($msg): ?>
 
 <div class="alert bad">
@@ -369,6 +363,20 @@ $active = "new-order";
     enctype="multipart/form-data"
     id="orderForm"
 >
+
+
+<div class="create-grid">
+
+
+<div class="create-col">
+
+
+<div class="card animate">
+
+
+<h2 class="create-card-title">Print details</h2>
+
+<p class="create-card-sub">Pick a service, set your options and add your files.</p>
 
 
 <!-- ==================================================
@@ -433,50 +441,6 @@ $active = "new-order";
     </option>
 
 </select>
-
-
-<!-- ==================================================
-     PRINTING AMOUNT (AUTO-CALCULATED)
-================================================== -->
-
-<label>
-    Printing Amount (₹)
-</label>
-
-<input
-    type="number"
-    name="amount"
-    id="amount"
-    min="0"
-    step="0.01"
-    readonly
-    value="<?= e($_POST["amount"] ?? "") ?>"
->
-
-<div class="file-info">
-
-    Calculated automatically at
-    <strong>₹<span id="rateDisplay"><?= number_format(
-        $page_rate,
-        2,
-    ) ?></span></strong>
-    per page, based on the selected service.
-
-    <br>
-
-    Pages detected:
-    <strong id="pageCount">0</strong>
-
-    <br><br>
-
-    <?= icon("star") ?>
-
-    Loyalty: every
-    <strong><?= (int) $free_order_every ?>th</strong>
-    order is completely
-    <strong>FREE</strong>.
-
-</div>
 
 
 <!-- ==================================================
@@ -630,7 +594,7 @@ $active = "new-order";
     <div id="file_name_display" style="margin-top:16px;font-weight:600;color:var(--secondary);"></div>
 </label>
 
-<div id="file_list"></div>
+<div id="file_list" class="file-list"></div>
 
 
 <div class="file-info">
@@ -652,9 +616,22 @@ $active = "new-order";
 </div>
 
 
-<!-- ==================================================
-     TOTAL
-================================================== -->
+</div>
+
+
+</div>
+
+
+<aside class="create-side">
+
+
+<div class="card animate-1">
+
+
+<div class="summary-title">
+    Order Summary
+</div>
+
 
 <div class="order-total-box">
 
@@ -701,9 +678,31 @@ $active = "new-order";
 </div>
 
 
-<!-- ==================================================
-     SUBMIT
-================================================== -->
+<div class="file-info" style="margin-top:18px">
+
+    <?= icon("star") ?>
+
+    Rate
+    <strong>₹<span id="rateDisplay"><?= number_format(
+        $page_rate,
+        2,
+    ) ?></span></strong>
+    per page
+
+    <br>
+
+    Pages detected:
+    <strong id="pageCount">0</strong>
+
+    <br><br>
+
+    Loyalty: every
+    <strong><?= (int) $free_order_every ?>th</strong>
+    order is completely
+    <strong>FREE</strong>.
+
+</div>
+
 
 <button
     class="btn full"
@@ -717,10 +716,25 @@ $active = "new-order";
 </button>
 
 
-</form>
+</div>
+
+
+</aside>
 
 
 </div>
+
+
+<input
+    type="hidden"
+    name="amount"
+    id="amount"
+    value="<?= e($_POST["amount"] ?? "") ?>"
+>
+
+
+</form>
+
 
 </div>
 
@@ -958,6 +972,22 @@ function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
     dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
 });
 
+const FILE_ICON =
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>' +
+    '<polyline points="14 2 14 8 20 8"></polyline>' +
+    '<line x1="16" y1="13" x2="8" y2="13"></line>' +
+    '<line x1="16" y1="17" x2="8" y2="17"></line></svg>';
+
+function formatSize(bytes) {
+    if (bytes === undefined || bytes === null) return '';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0, n = bytes;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? n : n.toFixed(1)) + ' ' + units[i];
+}
+
 function sameFile(a, b) {
     return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
 }
@@ -997,28 +1027,32 @@ async function refreshList() {
 
         selectedFiles.forEach(function(file, index) {
             const row = document.createElement('div');
-            row.style.cssText =
-                'display:flex;align-items:center;gap:8px;justify-content:space-between;' +
-                'padding:8px 10px;margin-top:8px;border:1px solid var(--border);' +
-                'border-radius:var(--r-sm);background:var(--panel);';
+            row.className = 'file-item';
 
-            const label = document.createElement('span');
-            label.style.cssText =
-                'font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-            label.textContent = file.name;
+            const nameWrap = document.createElement('div');
+            nameWrap.className = 'fi-name';
+            nameWrap.innerHTML = FILE_ICON;
+
+            const nameText = document.createElement('span');
+            nameText.textContent = file.name;
+            nameWrap.appendChild(nameText);
+
+            const size = document.createElement('span');
+            size.className = 'fi-size';
+            size.textContent = formatSize(file.size);
 
             const remove = document.createElement('button');
             remove.type = 'button';
             remove.textContent = 'Remove';
             remove.className = 'btn small outline';
-            remove.style.cssText = 'padding:4px 10px;font-size:12px;flex:0 0 auto;';
             remove.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 removeFile(index);
             });
 
-            row.appendChild(label);
+            row.appendChild(nameWrap);
+            row.appendChild(size);
             row.appendChild(remove);
             fileList.appendChild(row);
         });

@@ -149,6 +149,8 @@ if (count($staffIds) > 0) {
         $staff[(int) $user["id"]] = $user["name"];
     }
 }
+
+$isAdmin = $_SESSION["role"] === "admin";
 ?>
 
 <!doctype html>
@@ -235,6 +237,25 @@ Only Admin can change order tracking status.
 <div class="card animate">
 
 
+<div class="card-head">
+
+<div>
+
+<h2>
+    Orders
+</h2>
+
+<p class="muted" style="margin-top:6px">
+
+<?= count($orders) ?> order<?= count($orders) === 1 ? "" : "s" ?> in the system
+
+</p>
+
+</div>
+
+</div>
+
+
 <div class="searchbar">
 
 <input
@@ -258,47 +279,29 @@ Only Admin can change order tracking status.
 </div>
 
 
-<div class="tablewrap">
+<?php if (count($orders) === 0): ?>
+
+<div class="order-empty">
+
+<?= icon("inbox", "xl") ?>
+
+<b>
+    No orders found
+</b>
+
+<p>
+    Orders will appear here once students or staff place them.
+</p>
+
+</div>
+
+<?php else: ?>
 
 
-<table>
-
-
-<thead>
-
-<tr>
-
-<th>TOKEN</th>
-
-<th>ORDER BY</th>
-
-<th>SERVICE</th>
-
-<th>PRIORITY</th>
-
-<th>PRINT SIDE</th>
-
-<th>TOTAL</th>
-
-<th>PAYMENT</th>
-
-<th>DOCUMENT</th>
-
-<th>TRACKING</th>
-
-</tr>
-
-</thead>
-
-
-<tbody>
-
-
-<?php if (count($orders) > 0): ?>
+<div class="order-list">
 
 
 <?php foreach ($orders as $row): ?>
-
 
 <?php
 // ===================================================
@@ -306,6 +309,8 @@ Only Admin can change order tracking status.
 // ===================================================
 
 $orderType = (string) ($row["order_type"] ?? "Normal");
+
+$emergency = strtolower(trim($orderType)) === "emergency";
 
 // ===================================================
 // STUDENT / STAFF
@@ -321,10 +326,6 @@ $createdBy =
         ? (int) $row["created_by"]
         : 0;
 
-// ===================================================
-// DISPLAY ORDER OWNER
-// ===================================================
-
 if ($studentId > 0) {
     $orderBy = $students[$studentId] ?? "Student";
 
@@ -339,209 +340,152 @@ if ($studentId > 0) {
     $ownerType = "";
 }
 
-// ===================================================
-// PAYMENT
-// ===================================================
-
 $paymentStatus = (string) ($row["payment_status"] ?? "Pending");
-
-// ===================================================
-// TRACKING
-// ===================================================
 
 $status = (string) ($row["status"] ?? "Pending");
 
-// ===================================================
-// DOCUMENT
-// ===================================================
-
+$files = order_files($row);
 ?>
 
 
-<tr data-status="<?= e(strtolower($status)) ?>">
+<div class="order-card <?= $emergency ? "emergency" : "" ?>" data-status="<?= e(strtolower($status)) ?>">
+
+<div class="order-main">
 
 
-<!-- TOKEN -->
+<div class="order-identity">
 
-<td>
+<div class="order-token-line">
 
 <a
     class="order-token"
     href="../track.php?id=<?= (int) $row["id"] ?>"
     title="Track this order"
 >
-<strong>
+<b>
 <?= e($row["order_token"] ?? "") ?>
-</strong>
+</b>
 </a>
 
-</td>
+<span class="tag status-<?= e(strtolower($status)) ?>">
+<?= e($status) ?>
+</span>
 
+</div>
 
-<!-- ORDER BY -->
-
-<td>
-
-<strong>
-
-<?= e($orderBy) ?>
-
-</strong>
-
-
-<br>
-
-<small class="muted">
-
-<?= e($ownerType) ?> Order
-
-</small>
-
-</td>
-
-
-<!-- SERVICE -->
-
-<td>
-
+<div class="order-service">
 <?= e($row["service"] ?? "") ?>
+</div>
 
-</td>
+<div class="order-sub">
 
+<span><?= icon("file-text") ?> <?= (int) ($row["page_count"] ?? 0) ?> page<?= (int) ($row["page_count"] ?? 0) === 1 ? "" : "s" ?></span>
 
-<!-- PRIORITY -->
+<span><?= icon("printer") ?> <?= e($row["print_side"] ?? "Single") ?></span>
 
-<td>
+</div>
 
-<?php $priority = strtolower(trim($orderType)); ?>
-
-
-<?php if ($priority === "emergency" || $priority === "urgent"): ?>
-
-<span class="priority-emergency">
-
-<?= icon("alert") ?> <?= e($orderType) ?>
-
-</span>
-
-<?php else: ?>
-
-<span class="priority-normal">
-
-<?= e($orderType) ?>
-
-</span>
-
-<?php endif; ?>
-
-</td>
+</div>
 
 
-<!-- PRINT SIDE -->
+<div class="order-files">
 
-<td>
+<?php if (count($files) === 0): ?>
 
-<?= e($row["print_side"] ?? "Single") ?>
-
-</td>
-
-
-<!-- TOTAL -->
-
-<td>
-
-₹<?= number_format((float) ($row["amount"] ?? 0), 2) ?>
-
-</td>
-
-
-<!-- PAYMENT -->
-
-<td>
-
-<?php if (strtolower($paymentStatus) === "paid"): ?>
-
-<span class="badge badge-paid">
-
-Paid
-
-</span>
+<span class="muted">No file</span>
 
 <?php else: ?>
 
-<span class="badge badge-pending">
-
-<?= e($paymentStatus) ?>
-
-</span>
-
-<?php endif; ?>
-
-</td>
-
-
-<!-- DOCUMENT -->
-
-<td>
-
-<?php $orderFiles = order_files($row); ?>
-
-
-<?php if (count($orderFiles) === 0): ?>
-
-<span class="muted">
-
-No File
-
-</span>
-
-<?php else: ?>
-
-<?php foreach ($orderFiles as $fi => $of): ?>
-
-
-<?php $fileExt = strtoupper(pathinfo($of["name"], PATHINFO_EXTENSION)); ?>
-
+<?php foreach ($files as $fi => $of): ?>
 
 <a
     href="../download.php?id=<?= (int) $row["id"] ?>&file=<?= (int) $fi ?>"
-    class="btn small secondary download-btn"
-    style="margin:2px 0"
+    class="file-chip"
+    title="Download <?= e($of["name"]) ?>"
 >
 
 <?= icon("file-text") ?>
 
-<span>
-
-<?= e($fileExt) ?>
-
-</span>
+<span><?= e($of["name"]) ?></span>
 
 <?= icon("download") ?>
 
 </a>
 
-
 <?php endforeach; ?>
 
 <?php endif; ?>
 
-</td>
+</div>
 
 
-<!-- TRACKING -->
+<div class="order-side">
 
-<td>
+<div class="order-total">
+₹<?= number_format((float) ($row["amount"] ?? 0), 2) ?>
+</div>
+
+<div class="order-tags">
+
+<?php if ($emergency): ?>
+
+<span class="tag emergency-tag"><?= icon("alert") ?> Emergency</span>
+
+<?php else: ?>
+
+<span class="tag"><?= e($orderType) ?></span>
+
+<?php endif; ?>
 
 
-<?php if ($_SESSION["role"] === "admin"): ?>
+<?php if (strtolower($paymentStatus) === "paid"): ?>
 
+<span class="tag status-paid">Paid</span>
+
+<?php else: ?>
+
+<span class="tag status-<?= e(strtolower($paymentStatus)) ?>"><?= e($paymentStatus) ?></span>
+
+<?php endif; ?>
+
+</div>
+
+<div class="order-actions">
+
+<a
+    class="btn small outline"
+    href="../track.php?id=<?= (int) $row["id"] ?>"
+>
+<?= icon("package") ?> Track
+</a>
+
+</div>
+
+</div>
+
+
+</div>
+
+
+<div class="order-foot">
+
+<div class="who">
+
+<?= icon("user") ?>
+
+<span>
+<?= e($ownerType) ?> order by <b><?= e($orderBy) ?></b>
+</span>
+
+</div>
+
+
+<?php if ($isAdmin): ?>
 
 <form
     method="post"
     class="tracking-form"
 >
-
 
 <input
     type="hidden"
@@ -549,129 +493,52 @@ No File
     value="<?= (int) $row["id"] ?>"
 >
 
-
 <select
     name="status"
     class="form-control"
     required
 >
 
-
-<option
-    value="Pending"
-    <?= $status === "Pending" ? "selected" : "" ?>
->
-
-Pending
-
-</option>
-
-
-<option
-    value="Processing"
-    <?= $status === "Processing" ? "selected" : "" ?>
->
-
-Processing
-
-</option>
-
-
-<option
-    value="Ready"
-    <?= $status === "Ready" ? "selected" : "" ?>
->
-
-Ready
-
-</option>
-
-
-<option
-    value="Completed"
-    <?= $status === "Completed" ? "selected" : "" ?>
->
-
-Completed
-
-</option>
-
-
-<option
-    value="Cancelled"
-    <?= $status === "Cancelled" ? "selected" : "" ?>
->
-
-Cancelled
-
-</option>
-
+<option value="Pending" <?= $status === "Pending" ? "selected" : "" ?>>Pending</option>
+<option value="Processing" <?= $status === "Processing" ? "selected" : "" ?>>Processing</option>
+<option value="Ready" <?= $status === "Ready" ? "selected" : "" ?>>Ready</option>
+<option value="Completed" <?= $status === "Completed" ? "selected" : "" ?>>Completed</option>
+<option value="Cancelled" <?= $status === "Cancelled" ? "selected" : "" ?>>Cancelled</option>
 
 </select>
-
 
 <button
     type="submit"
     name="update_status"
     class="btn small"
 >
-
-Save
-
+<?= icon("check") ?> Save
 </button>
-
 
 </form>
 
-
 <?php else: ?>
 
-
 <span class="readonly-status">
-
 <?= e($status) ?>
-
 </span>
-
 
 <?php endif; ?>
 
+</div>
 
-</td>
 
-
-</tr>
+</div>
 
 
 <?php endforeach; ?>
 
 
-<?php else: ?>
-
-
-<tr>
-
-<td
-    colspan="9"
-    style="text-align:center;"
-    class="muted"
->
-
-No orders found.
-
-</td>
-
-</tr>
+</div>
 
 
 <?php endif; ?>
 
-
-</tbody>
-
-</table>
-
-</div>
 
 </div>
 
@@ -686,15 +553,15 @@ No orders found.
   (function () {
     var q = document.getElementById("orderSearch");
     var st = document.getElementById("orderStatusFilter");
-    var rows = Array.prototype.slice.call(document.querySelectorAll("table tbody tr[data-status]"));
-    if (!rows.length) return;
+    var cards = Array.prototype.slice.call(document.querySelectorAll(".order-card[data-status]"));
+    if (!cards.length) return;
     function apply() {
       var term = (q.value || "").toLowerCase();
       var status = st ? st.value : "";
-      rows.forEach(function (r) {
-        var ok = r.textContent.toLowerCase().indexOf(term) > -1;
-        if (status) ok = ok && (r.getAttribute("data-status") || "") === status;
-        r.style.display = ok ? "" : "none";
+      cards.forEach(function (c) {
+        var ok = c.textContent.toLowerCase().indexOf(term) > -1;
+        if (status) ok = ok && (c.getAttribute("data-status") || "") === status;
+        c.style.display = ok ? "" : "none";
       });
     }
     if (q) q.addEventListener("input", apply);

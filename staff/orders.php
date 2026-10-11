@@ -469,7 +469,7 @@ Max 500 MB per file • Multiple files allowed
 
 </small>
 
-<div id="file_list"></div>
+<div id="file_list" class="file-list"></div>
 
 </div>
 
@@ -509,12 +509,20 @@ Create Order &amp; Continue to Razorpay
     Order Queue
 </h2>
 
+<?php if (count($orders) > 0): ?>
+
+<small class="muted">
+    <?= count($orders) ?> order<?= count($orders) === 1 ? "" : "s" ?>
+</small>
+
+<?php endif; ?>
+
 </div>
 
 
 <?php if (count($orders) === 0): ?>
 
-<div class="empty-state">
+<div class="order-empty">
 
 <?= icon("clipboard", "xl") ?>
 
@@ -531,30 +539,18 @@ Create Order &amp; Continue to Razorpay
 
 <?php else: ?>
 
-
-<div class="tablewrap">
-
-<table>
-
-<tr>
-
-<th>Token</th>
-<th>Service</th>
-<th>Document</th>
-<th>Priority</th>
-<th>Total</th>
-<th>Payment</th>
-<th>Status</th>
-
-</tr>
-
+<div class="order-list">
 
 <?php foreach ($orders as $o): ?>
 
-<tr>
+<div class="order-card">
+
+<div class="order-main">
 
 
-<td>
+<div class="order-identity">
+
+<div class="order-token-line">
 
 <a
     class="order-token"
@@ -566,48 +562,48 @@ Create Order &amp; Continue to Razorpay
 </b>
 </a>
 
-</td>
+<span class="tag status-<?= strtolower($o["status"] ?? "pending") ?>">
+<?= e($o["status"] ?? "Pending") ?>
+</span>
 
+</div>
 
-<td>
-
+<div class="order-service">
 <?= e($o["service"] ?? "") ?>
+</div>
 
-</td>
+<div class="order-sub">
+
+<span><?= icon("file-text") ?> <?= (int) ($o["page_count"] ?? 0) ?> page<?= (int) ($o["page_count"] ?? 0) === 1 ? "" : "s" ?></span>
+
+<span><?= icon("printer") ?> <?= e($o["print_side"] ?? "Single") ?></span>
+
+</div>
+
+</div>
 
 
-<td>
+<div class="order-files">
 
 <?php $orderFiles = order_files($o); ?>
 
 <?php if (count($orderFiles) === 0): ?>
 
-<span class="muted">
-—
-</span>
+<span class="muted">No document</span>
 
 <?php else: ?>
 
 <?php foreach ($orderFiles as $fi => $of): ?>
 
-<?php $ext = strtoupper(pathinfo($of["name"], PATHINFO_EXTENSION)); ?>
-
 <a
     href="../download.php?id=<?= (int) $o["id"] ?>&file=<?= (int) $fi ?>"
-    class="btn small outline"
-    style="
-        gap:5px;
-        padding:5px 10px;
-        font-size:12px;
-        margin:2px 0;
-    "
+    class="file-chip"
+    title="Download <?= e($of["name"]) ?>"
 >
 
 <?= icon("file-text") ?>
 
-<span>
-<?= e($ext) ?>
-</span>
+<span><?= e($of["name"]) ?></span>
 
 <?= icon("download") ?>
 
@@ -617,57 +613,46 @@ Create Order &amp; Continue to Razorpay
 
 <?php endif; ?>
 
-</td>
+</div>
 
 
-<td>
+<div class="order-side">
 
-<span class="tag">
-Normal
-</span>
-
-</td>
-
-
-<td>
-
+<div class="order-total">
 ₹<?= number_format((float) ($o["amount"] ?? 0), 2) ?>
+</div>
 
-</td>
+<div class="order-tags">
 
-
-<td>
+<span class="tag">Normal</span>
 
 <span
     class="tag status-<?= strtolower($o["payment_status"] ?? "pending") ?>"
 >
-
 <?= e($o["payment_status"] ?? "Pending") ?>
-
 </span>
 
-</td>
+</div>
 
+<div class="order-actions">
 
-<td>
-
-<span
-    class="tag status-<?= strtolower($o["status"] ?? "pending") ?>"
+<a
+    class="btn small outline"
+    href="../track.php?id=<?= (int) ($o["id"] ?? 0) ?>"
 >
+<?= icon("package") ?> Track
+</a>
 
-<?= e($o["status"] ?? "Pending") ?>
+</div>
 
-</span>
-
-</td>
+</div>
 
 
-</tr>
+</div>
+
+</div>
 
 <?php endforeach; ?>
-
-
-</table>
 
 </div>
 
@@ -810,6 +795,35 @@ const fileList =
 let selectedFiles = [];
 
 
+const FILE_ICON =
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>' +
+    '<polyline points="14 2 14 8 20 8"></polyline>' +
+    '<line x1="16" y1="13" x2="8" y2="13"></line>' +
+    '<line x1="16" y1="17" x2="8" y2="17"></line></svg>';
+
+
+function formatSize(bytes) {
+
+    if (bytes === undefined || bytes === null) {
+        return '';
+    }
+
+    const units = ['B', 'KB', 'MB', 'GB'];
+
+    let i = 0;
+    let n = bytes;
+
+    while (n >= 1024 && i < units.length - 1) {
+        n /= 1024;
+        i++;
+    }
+
+    return (i === 0 ? n : n.toFixed(1)) + ' ' + units[i];
+}
+
+
 function sameFile(a, b) {
 
     return (
@@ -854,20 +868,28 @@ async function refreshList() {
             const row =
                 document.createElement('div');
 
-            row.style.cssText =
-                'display:flex;align-items:center;gap:8px;' +
-                'justify-content:space-between;padding:8px 10px;' +
-                'margin-top:8px;border:1px solid var(--border);' +
-                'border-radius:var(--r-sm);background:var(--panel);';
+            row.className = 'file-item';
 
-            const label =
+            const nameWrap =
+                document.createElement('div');
+
+            nameWrap.className = 'fi-name';
+
+            nameWrap.innerHTML = FILE_ICON;
+
+            const nameText =
                 document.createElement('span');
 
-            label.style.cssText =
-                'font-size:13px;overflow:hidden;' +
-                'text-overflow:ellipsis;white-space:nowrap;';
+            nameText.textContent = file.name;
 
-            label.textContent = file.name;
+            nameWrap.appendChild(nameText);
+
+            const size =
+                document.createElement('span');
+
+            size.className = 'fi-size';
+
+            size.textContent = formatSize(file.size);
 
             const remove =
                 document.createElement('button');
@@ -878,9 +900,6 @@ async function refreshList() {
 
             remove.className = 'btn small outline';
 
-            remove.style.cssText =
-                'padding:4px 10px;font-size:12px;flex:0 0 auto;';
-
             remove.addEventListener('click', function(e) {
 
                 e.preventDefault();
@@ -890,7 +909,9 @@ async function refreshList() {
                 removeFile(index);
             });
 
-            row.appendChild(label);
+            row.appendChild(nameWrap);
+
+            row.appendChild(size);
 
             row.appendChild(remove);
 
