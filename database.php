@@ -260,6 +260,96 @@ if (!function_exists("print_amount")) {
 }
 
 // =====================================================
+// NORMALIZE MULTIPLE UPLOADS
+// =====================================================
+
+if (!function_exists("normalize_uploads")) {
+    function normalize_uploads($field = "document")
+    {
+        if (!isset($_FILES[$field])) {
+            return [];
+        }
+
+        $f = $_FILES[$field];
+
+        // Single file input
+        if (!is_array($f["name"])) {
+            if (
+                (int) $f["error"] === UPLOAD_ERR_NO_FILE ||
+                (string) $f["name"] === ""
+            ) {
+                return [];
+            }
+
+            return [
+                [
+                    "name" => (string) $f["name"],
+                    "tmp_name" => (string) $f["tmp_name"],
+                    "size" => (int) $f["size"],
+                    "error" => (int) $f["error"],
+                ],
+            ];
+        }
+
+        // Multiple file input (name="document[]")
+        $files = [];
+
+        foreach ($f["name"] as $i => $name) {
+            $error = (int) ($f["error"][$i] ?? UPLOAD_ERR_NO_FILE);
+
+            if ($error === UPLOAD_ERR_NO_FILE || (string) $name === "") {
+                continue;
+            }
+
+            $files[] = [
+                "name" => (string) $name,
+                "tmp_name" => (string) ($f["tmp_name"][$i] ?? ""),
+                "size" => (int) ($f["size"][$i] ?? 0),
+                "error" => $error,
+            ];
+        }
+
+        return $files;
+    }
+}
+
+// =====================================================
+// ORDER FILES (multi-file aware, backward compatible)
+// =====================================================
+
+if (!function_exists("order_files")) {
+    function order_files($order)
+    {
+        $files = [];
+
+        if (isset($order["files"]) && is_iterable($order["files"])) {
+            foreach ($order["files"] as $f) {
+                $files[] = [
+                    "name" => (string) ($f["name"] ?? ""),
+                    "data" => $f["data"] ?? null,
+                    "size" => (int) ($f["size"] ?? 0),
+                    "extension" => (string) ($f["extension"] ?? ""),
+                    "page_count" => (int) ($f["page_count"] ?? 0),
+                ];
+            }
+        }
+
+        // Legacy single-file orders
+        if (!$files && !empty($order["file_name"])) {
+            $files[] = [
+                "name" => (string) $order["file_name"],
+                "data" => $order["file_data"] ?? null,
+                "size" => (int) ($order["file_size"] ?? 0),
+                "extension" => (string) ($order["file_extension"] ?? ""),
+                "page_count" => (int) ($order["page_count"] ?? 0),
+            ];
+        }
+
+        return $files;
+    }
+}
+
+// =====================================================
 // LOYALTY - FREE ORDER
 // =====================================================
 

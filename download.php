@@ -16,7 +16,17 @@ if ($order_id <= 0) {
 
 $row = $conn->orders->findOne(
     ["id" => $order_id],
-    ["projection" => ["file_name" => 1, "file_data" => 1, "student_id" => 1]],
+    [
+        "projection" => [
+            "files" => 1,
+            "file_name" => 1,
+            "file_data" => 1,
+            "file_size" => 1,
+            "file_extension" => 1,
+            "page_count" => 1,
+            "student_id" => 1,
+        ],
+    ],
 );
 
 if (!$row) {
@@ -34,11 +44,26 @@ if (
     exit("Access denied.");
 }
 
-$file_name = basename(trim((string) $row["file_name"]));
-$file_data = $row["file_data"];
+$files = order_files($row);
+
+$index = (int) ($_GET["file"] ?? 0);
+if (!isset($files[$index])) {
+    $index = 0;
+}
+
+if (!isset($files[$index])) {
+    http_response_code(404);
+    exit("Document is not stored in the database.");
+}
+
+$file_name = basename(trim((string) $files[$index]["name"]));
+
+$file_data = $files[$index]["data"];
+
 if ($file_data instanceof MongoDB\BSON\Binary) {
     $file_data = $file_data->getData();
 }
+
 if ($file_name === "" || $file_data === null || $file_data === "") {
     http_response_code(404);
     exit("Document is not stored in the database.");

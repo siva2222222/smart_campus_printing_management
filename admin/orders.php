@@ -355,7 +355,6 @@ $status = (string) ($row["status"] ?? "Pending");
 // DOCUMENT
 // ===================================================
 
-$fileName = trim((string) ($row["file_name"] ?? ""));
 ?>
 
 
@@ -485,15 +484,29 @@ Paid
 
 <td>
 
-<?php if ($fileName !== ""): ?>
+<?php $orderFiles = order_files($row); ?>
 
 
-<?php $fileExt = strtoupper(pathinfo($fileName, PATHINFO_EXTENSION)); ?>
+<?php if (count($orderFiles) === 0): ?>
+
+<span class="muted">
+
+No File
+
+</span>
+
+<?php else: ?>
+
+<?php foreach ($orderFiles as $fi => $of): ?>
+
+
+<?php $fileExt = strtoupper(pathinfo($of["name"], PATHINFO_EXTENSION)); ?>
 
 
 <a
-    href="../download.php?id=<?= (int) $row["id"] ?>"
+    href="../download.php?id=<?= (int) $row["id"] ?>&file=<?= (int) $fi ?>"
     class="btn small secondary download-btn"
+    style="margin:2px 0"
 >
 
 <?= icon("file-text") ?>
@@ -509,13 +522,7 @@ Paid
 </a>
 
 
-<?php else: ?>
-
-<span class="muted">
-
-No File
-
-</span>
+<?php endforeach; ?>
 
 <?php endif; ?>
 

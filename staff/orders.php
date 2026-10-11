@@ -37,69 +37,92 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // =================================================
     // BASIC VALIDATION
     // =================================================
+    $uploads = normalize_uploads("document");
 
     if ($service === "") {
         $msg = "Enter valid order details.";
-    } elseif (
-        !isset($_FILES["document"]) ||
-        $_FILES["document"]["error"] !== UPLOAD_ERR_OK
-    ) {
-        $msg = "Please upload a file.";
+    } elseif (count($uploads) === 0) {
+        $msg = "Please upload at least one file.";
     } else {
-        $file = $_FILES["document"];
-
-        $ext = strtolower(pathinfo($file["name"], PATHINFO_EXTENSION));
-
-        // =============================================
-        // FILE TYPE
-        // =============================================
-
         $allowed = ["pdf", "png", "jpg", "jpeg", "webp", "gif"];
 
-        if (!in_array($ext, $allowed, true)) {
-            $msg = "Allowed files: PDF, PNG, JPG, JPEG, WEBP and GIF.";
-        }
+        $stored_files = [];
 
         // =============================================
-        // FILE SIZE
+        // VALIDATE + READ EVERY UPLOADED FILE
         // =============================================
-        elseif ($file["size"] > UPLOAD_MAX_BYTES) {
-            $msg = "Maximum file size is 500 MB.";
-        }
 
-        // =============================================
-        // SAVE ORDER
-        // =============================================
-        else {
+        foreach ($uploads as $file) {
+            if ($file["error"] !== UPLOAD_ERR_OK) {
+                $msg = "One of the files failed to upload. Please try again.";
+
+                break;
+            }
+
+            $ext = strtolower(pathinfo($file["name"], PATHINFO_EXTENSION));
+
+            // FILE TYPE
+            if (!in_array($ext, $allowed, true)) {
+                $msg =
+                    "Allowed files: PDF, PNG, JPG, JPEG, WEBP and GIF. " .
+                    "Invalid: " .
+                    basename($file["name"]);
+
+                break;
+            }
+
+            // FILE SIZE
+            if ($file["size"] > UPLOAD_MAX_BYTES) {
+                $msg = "Maximum file size is 500 MB per file.";
+
+                break;
+            }
+
             $file_data = file_get_contents($file["tmp_name"]);
 
             if ($file_data === false) {
                 $msg = "Unable to read the uploaded document.";
-            } else {
-                // =====================================
-                // CALCULATE AMOUNT FROM PAGE COUNT
-                // =====================================
 
-                $page_count = document_page_count($file_data, $ext);
+                break;
+            }
 
-                $base_amount = print_amount($page_count, $service);
+            $pages = document_page_count($file_data, $ext);
 
-                $page_rate = service_page_rate($service);
+            $page_count += $pages;
 
-                $amount = $base_amount;
+            $stored_files[] = [
+                "name" => basename($file["name"]),
 
-                try {
-                    $order_id = next_id("orders");
+                "data" => new MongoDB\BSON\Binary(
+                    $file_data,
+                    MongoDB\BSON\Binary::TYPE_GENERIC,
+                ),
 
-                    $token = make_token();
+                "size" => (int) $file["size"],
 
-                    $created_by = (int) $_SESSION["user_id"];
+                "extension" => $ext,
 
-                    $file_name = basename($file["name"]);
+                "page_count" => $pages,
+            ];
+        }
 
-                    // =================================
-                    // ORDER DOCUMENT
-                    // =================================
+        if (!$msg) {
+            $base_amount = print_amount($page_count, $service);
+
+            $page_rate = service_page_rate($service);
+
+            $amount = $base_amount;
+
+            try {
+                $order_id = next_id("orders");
+
+                $token = make_token();
+
+                $created_by = (int) $_SESSION["user_id"];
+
+                // =================================
+                // ORDER DOCUMENT
+                // =================================
 
                     $doc = [
                         "id" => $order_id,
@@ -128,16 +151,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                         "print_side" => $print_side,
 
-                        "file_name" => $file_name,
+                        "files" => $stored_files,
 
-                        "file_data" => new MongoDB\BSON\Binary(
-                            $file_data,
-                            MongoDB\BSON\Binary::TYPE_GENERIC,
-                        ),
+                        "file_count" => count($stored_files),
 
-                        "file_size" => (int) $file["size"],
+                        "file_name" => $stored_files[0]["name"],
 
-                        "file_extension" => $ext,
+                        "file_size" => $stored_files[0]["size"],
+
+                        "file_extension" => $stored_files[0]["extension"],
 
                         "payment_status" => "Pending",
 
@@ -164,7 +186,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 } catch (Throwable $e) {
                     $msg = "Unable to create order: " . $e->getMessage();
                 }
-            }
         }
     }
 }
@@ -433,9 +454,10 @@ Staff orders use Normal delivery only.
 
 <input
     type="file"
-    name="document"
+    name="document[]"
     id="document"
     accept=".pdf,.png,.jpg,.jpeg,.webp,.gif"
+    multiple
     required
 >
 
@@ -443,9 +465,11 @@ Staff orders use Normal delivery only.
 
 PDF, PNG, JPG, JPEG, WEBP, GIF
 •
-Max 500 MB
+Max 500 MB per file • Multiple files allowed
 
 </small>
+
+<div id="file_list"></div>
 
 </div>
 
@@ -554,17 +578,28 @@ Create Order &amp; Continue to Razorpay
 
 <td>
 
-<?php if (!empty($o["file_name"])): ?>
+<?php $orderFiles = order_files($o); ?>
 
-<?php $ext = strtoupper(pathinfo($o["file_name"], PATHINFO_EXTENSION)); ?>
+<?php if (count($orderFiles) === 0): ?>
+
+<span class="muted">
+—
+</span>
+
+<?php else: ?>
+
+<?php foreach ($orderFiles as $fi => $of): ?>
+
+<?php $ext = strtoupper(pathinfo($of["name"], PATHINFO_EXTENSION)); ?>
 
 <a
-    href="../download.php?id=<?= (int) $o["id"] ?>"
+    href="../download.php?id=<?= (int) $o["id"] ?>&file=<?= (int) $fi ?>"
     class="btn small outline"
     style="
         gap:5px;
         padding:5px 10px;
         font-size:12px;
+        margin:2px 0;
     "
 >
 
@@ -578,11 +613,7 @@ Create Order &amp; Continue to Razorpay
 
 </a>
 
-<?php else: ?>
-
-<span class="muted">
-—
-</span>
+<?php endforeach; ?>
 
 <?php endif; ?>
 
@@ -773,19 +804,141 @@ function updateTotal() {
 }
 
 
+const fileList =
+    document.getElementById('file_list');
+
+let selectedFiles = [];
+
+
+function sameFile(a, b) {
+
+    return (
+        a.name === b.name &&
+        a.size === b.size &&
+        a.lastModified === b.lastModified
+    );
+}
+
+
+function syncInput() {
+
+    const dt =
+        new DataTransfer();
+
+    selectedFiles.forEach(
+        function(file) { dt.items.add(file); }
+    );
+
+    documentInput.files = dt.files;
+}
+
+
+function removeFile(index) {
+
+    selectedFiles.splice(index, 1);
+
+    syncInput();
+
+    refreshList();
+}
+
+
+async function refreshList() {
+
+    if (fileList) {
+
+        fileList.innerHTML = '';
+
+        selectedFiles.forEach(function(file, index) {
+
+            const row =
+                document.createElement('div');
+
+            row.style.cssText =
+                'display:flex;align-items:center;gap:8px;' +
+                'justify-content:space-between;padding:8px 10px;' +
+                'margin-top:8px;border:1px solid var(--border);' +
+                'border-radius:var(--r-sm);background:var(--panel);';
+
+            const label =
+                document.createElement('span');
+
+            label.style.cssText =
+                'font-size:13px;overflow:hidden;' +
+                'text-overflow:ellipsis;white-space:nowrap;';
+
+            label.textContent = file.name;
+
+            const remove =
+                document.createElement('button');
+
+            remove.type = 'button';
+
+            remove.textContent = 'Remove';
+
+            remove.className = 'btn small outline';
+
+            remove.style.cssText =
+                'padding:4px 10px;font-size:12px;flex:0 0 auto;';
+
+            remove.addEventListener('click', function(e) {
+
+                e.preventDefault();
+
+                e.stopPropagation();
+
+                removeFile(index);
+            });
+
+            row.appendChild(label);
+
+            row.appendChild(remove);
+
+            fileList.appendChild(row);
+        });
+    }
+
+    let total = 0;
+
+    for (const file of selectedFiles) {
+
+        total += await countPages(file);
+    }
+
+    pageCount = total;
+
+    updateTotal();
+}
+
+
+function addFiles(list) {
+
+    Array.from(list || []).forEach(function(file) {
+
+        if (
+            !selectedFiles.some(
+                function(f) { return sameFile(f, file); }
+            )
+        ) {
+
+            selectedFiles.push(file);
+        }
+    });
+
+    syncInput();
+
+    refreshList();
+}
+
+
 documentInput.addEventListener(
     'change',
-    async function() {
+    function() {
 
-        const file =
-            this.files && this.files[0]
-                ? this.files[0]
-                : null;
+        if (this.files && this.files.length) {
 
-        pageCount =
-            await countPages(file);
-
-        updateTotal();
+            addFiles(this.files);
+        }
     }
 );
 

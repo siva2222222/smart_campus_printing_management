@@ -55,55 +55,100 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // =================================================
     // VALIDATION
     // =================================================
+    $uploads = normalize_uploads("document");
 
     if ($service === "") {
         $msg = "Please select a printing service.";
-    } elseif (
-        !isset($_FILES["document"]) ||
-        $_FILES["document"]["error"] !== UPLOAD_ERR_OK
-    ) {
-        $msg = "Please upload a PDF or image.";
+    } elseif (count($uploads) === 0) {
+        $msg = "Please upload at least one PDF or image.";
     } else {
-        $file = $_FILES["document"];
-
-        $original_name = $file["name"];
-        $tmp_name = $file["tmp_name"];
-        $file_size = (int) $file["size"];
-
-        $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
-
         // =============================================
-        // FILE TYPE
+        // VALIDATE + READ EVERY UPLOADED FILE
         // =============================================
 
-        if (!in_array($extension, $allowed_extensions, true)) {
-            $msg = "Allowed files: PDF, PNG, JPG, JPEG, WEBP and GIF.";
+        $stored_files = [];
 
-            // =============================================
+        foreach ($uploads as $file) {
+            if ($file["error"] !== UPLOAD_ERR_OK) {
+                $msg = "One of the files failed to upload. Please try again.";
+
+                break;
+            }
+
+            $original_name = $file["name"];
+
+            $tmp_name = $file["tmp_name"];
+
+            $file_size = (int) $file["size"];
+
+            $extension = strtolower(
+                pathinfo($original_name, PATHINFO_EXTENSION),
+            );
+
+            // =========================================
+            // FILE TYPE
+            // =========================================
+
+            if (!in_array($extension, $allowed_extensions, true)) {
+                $msg =
+                    "Allowed files: PDF, PNG, JPG, JPEG, WEBP and GIF. " .
+                    "Invalid: " .
+                    basename($original_name);
+
+                break;
+            }
+
+            // =========================================
             // FILE SIZE
-            // =============================================
-        } elseif ($file_size > $max_file_size) {
-            $msg = "Maximum file size is 500 MB.";
+            // =========================================
 
-            // =============================================
+            if ($file_size > $max_file_size) {
+                $msg = "Maximum file size is 500 MB per file.";
+
+                break;
+            }
+
+            // =========================================
             // READ FILE
-            // =============================================
-        } else {
+            // =========================================
+
             $file_data = file_get_contents($tmp_name);
 
             if ($file_data === false) {
                 $msg = "Unable to read the uploaded document.";
-            } else {
-                // =========================================
-                // CALCULATE AMOUNT FROM PAGE COUNT
-                // =========================================
 
-                $page_count = document_page_count($file_data, $extension);
+                break;
+            }
+
+            $pages = document_page_count($file_data, $extension);
+
+            $page_count += $pages;
+
+            $stored_files[] = [
+                "name" => basename($original_name),
+
+                "data" => new MongoDB\BSON\Binary(
+                    $file_data,
+                    MongoDB\BSON\Binary::TYPE_GENERIC,
+                ),
+
+                "size" => $file_size,
+
+                "extension" => $extension,
+
+                "page_count" => $pages,
+            ];
+        }
+
+        if (!$msg) {
+            // =========================================
+            // CALCULATE AMOUNT FROM PAGE COUNT
+            // =========================================
+
 
                 $page_rate = service_page_rate($service);
 
                 $base_amount = print_amount($page_count, $service);
-
                 // =========================================
                 // LOYALTY - EVERY 11TH ORDER IS FREE
                 // =========================================
@@ -141,12 +186,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $order_id = next_id("orders");
 
                     // =================================
-                    // CLEAN FILE NAME
-                    // =================================
-
-                    $name = basename($original_name);
-
-                    // =================================
                     // CREATE ORDER DOCUMENT
                     // =================================
 
@@ -181,22 +220,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                         "print_side" => $print_side,
 
-                        "file_name" => $name,
-
                         /*
-                         * Store the actual uploaded file
-                         * directly inside MongoDB.
-                         *
-                         * No uploads folder required.
+                         * Store all uploaded files directly
+                         * inside MongoDB. No uploads folder
+                         * required.
                          */
-                        "file_data" => new MongoDB\BSON\Binary(
-                            $file_data,
-                            MongoDB\BSON\Binary::TYPE_GENERIC,
-                        ),
+                        "files" => $stored_files,
 
-                        "file_size" => $file_size,
+                        "file_count" => count($stored_files),
 
-                        "file_extension" => $extension,
+                        // First file kept at top level for
+                        // backward compatibility.
+                        "file_name" => $stored_files[0]["name"],
+
+                        "file_size" => $stored_files[0]["size"],
+
+                        "file_extension" => $stored_files[0]["extension"],
 
                         "payment_status" => "Pending",
 
@@ -223,7 +262,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 } catch (Throwable $e) {
                     $msg = "Unable to create order: " . $e->getMessage();
                 }
-            }
         }
     }
 }
@@ -571,36 +609,45 @@ $active = "new-order";
 ================================================== -->
 
 <label>
-    PDF / Image Document
+    PDF / Image Documents (you can select multiple)
 </label>
 
 <label class="upload-area" id="drop_zone" for="document">
     <?= icon("upload", "lg") ?>
-    <b style="display:block;margin-bottom:8px;color:#fff;">Drag and drop your file here</b>
+    <b style="display:block;margin-bottom:8px;color:#fff;">Drag and drop your files here</b>
     <span class="muted" style="display:block;margin-bottom:16px;">or</span>
     <span class="btn outline small">Browse Files</span>
 
     <input
         type="file"
-        name="document"
+        name="document[]"
         id="document"
         accept=".pdf,.png,.jpg,.jpeg,.webp,.gif"
+        multiple
         required
         style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;"
     >
     <div id="file_name_display" style="margin-top:16px;font-weight:600;color:var(--secondary);"></div>
 </label>
 
+<div id="file_list"></div>
+
 
 <div class="file-info">
 
     Maximum file size:
-    <strong>500 MB</strong>
+    <strong>500 MB per file</strong>
 
     <br>
 
     Supported:
     PDF, PNG, JPG, JPEG, WEBP, GIF
+
+    <br>
+
+    You can upload
+    <strong>multiple files</strong>
+    in one order — pages are added together.
 
 </div>
 
@@ -892,9 +939,12 @@ orderTypes.forEach(function(radio) { radio.addEventListener('change', updateTota
 if (serviceSelect) { serviceSelect.addEventListener('change', updateTotal); }
 updateTotal();
 
-/* ============ Drag and Drop ============ */
+/* ============ Drag and Drop + cumulative file list ============ */
 const dropZone = document.getElementById('drop_zone');
 const fileNameDisplay = document.getElementById('file_name_display');
+const fileList = document.getElementById('file_list');
+
+let selectedFiles = [];
 
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
     dropZone.addEventListener(eventName, preventDefaults, false);
@@ -908,26 +958,94 @@ function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
     dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
 });
 
+function sameFile(a, b) {
+    return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+}
+
+function syncInput() {
+    const dt = new DataTransfer();
+    selectedFiles.forEach(function(file) { dt.items.add(file); });
+    documentInput.files = dt.files;
+}
+
+function addFiles(list) {
+    Array.from(list || []).forEach(function(file) {
+        if (!selectedFiles.some(function(f) { return sameFile(f, file); })) {
+            selectedFiles.push(file);
+        }
+    });
+    syncInput();
+    refreshList();
+}
+
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    syncInput();
+    refreshList();
+}
+
+async function refreshList() {
+    if (fileNameDisplay) {
+        fileNameDisplay.textContent =
+            selectedFiles.length > 1
+                ? selectedFiles.length + ' files selected'
+                : (selectedFiles[0] ? selectedFiles[0].name : '');
+    }
+
+    if (fileList) {
+        fileList.innerHTML = '';
+
+        selectedFiles.forEach(function(file, index) {
+            const row = document.createElement('div');
+            row.style.cssText =
+                'display:flex;align-items:center;gap:8px;justify-content:space-between;' +
+                'padding:8px 10px;margin-top:8px;border:1px solid var(--border);' +
+                'border-radius:var(--r-sm);background:var(--panel);';
+
+            const label = document.createElement('span');
+            label.style.cssText =
+                'font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            label.textContent = file.name;
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.textContent = 'Remove';
+            remove.className = 'btn small outline';
+            remove.style.cssText = 'padding:4px 10px;font-size:12px;flex:0 0 auto;';
+            remove.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                removeFile(index);
+            });
+
+            row.appendChild(label);
+            row.appendChild(remove);
+            fileList.appendChild(row);
+        });
+    }
+
+    let total = 0;
+
+    for (const file of selectedFiles) {
+        total += await countPages(file);
+    }
+
+    pageCount = total;
+    updateTotal();
+}
+
 dropZone.addEventListener('drop', (e) => {
     const dt = e.dataTransfer;
-    const files = dt.files;
-    if (files.length) {
-        documentInput.files = files;
-        handleFiles(files[0]);
+    if (dt.files && dt.files.length) {
+        addFiles(dt.files);
     }
 });
 
 documentInput.addEventListener('change', function() {
-    if (this.files && this.files[0]) {
-        handleFiles(this.files[0]);
+    if (this.files && this.files.length) {
+        addFiles(this.files);
     }
 });
-
-async function handleFiles(file) {
-    fileNameDisplay.textContent = file.name;
-    pageCount = await countPages(file);
-    updateTotal();
-}
 
 </script>
 

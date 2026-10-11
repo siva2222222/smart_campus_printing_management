@@ -61,8 +61,7 @@ $meta = [
 ];
 
 $service = (string) ($o["service"] ?? "");
-$file = trim((string) ($o["file_name"] ?? ""));
-$ext = $file !== "" ? strtoupper(pathinfo($file, PATHINFO_EXTENSION)) : "";
+$orderFiles = order_files($o);
 $base = "";
 
 if ($role === "staff") {
@@ -151,9 +150,10 @@ $backLink = $role === "staff" ? "staff/orders.php" : ($role === "admin" ? "admin
       <div class="total"><b><?= !empty($o["is_free"]) ? "Loyalty free order" : "Total paid" ?></b><strong>₹<?= number_format((float) ($o["amount"] ?? 0), 2) ?></strong></div>
     </div>
 
-    <?php if ($file !== ""): ?>
-      <a class="btn outline" href="download.php?id=<?= (int) $o["id"] ?>"><?= icon("download") ?> Download <?= e($ext) ?></a>
-    <?php endif; ?>
+    <?php foreach ($orderFiles as $fi => $of): ?>
+      <?php $ext = strtoupper(pathinfo($of["name"], PATHINFO_EXTENSION)); ?>
+      <a class="btn outline" style="margin:4px 6px 0 0" href="download.php?id=<?= (int) $o["id"] ?>&file=<?= (int) $fi ?>"><?= icon("download") ?> Download <?= e($of["name"] ?: $ext) ?></a>
+    <?php endforeach; ?>
   </div>
 </div>
 </main>

@@ -37,16 +37,19 @@ $active = "my-orders";
     "id"
 ] ?>" title="Track this order"><b><?= e($o["order_token"]) ?></b></a></td><td><?= e(
     $o["service"],
-) ?></td><td><?php if (!empty($o["file_name"])):
-    $ext = strtoupper(
-        pathinfo($o["file_name"], PATHINFO_EXTENSION),
-    ); ?><a href="../download.php?id=<?= (int) $o[
-    "id"
-] ?>" class="btn small outline" style="gap:5px;padding:5px 10px;font-size:12px"><?= icon(
-    "file-text",
-) ?> <span><?= e($ext) ?></span> <?= icon("download") ?></a><?php
+) ?></td><td><?php $orderFiles = order_files($o);
+if (count($orderFiles) === 0):
+    ?><span class="muted">—</span><?php
 else:
-     ?><span class="muted">—</span><?php
+    foreach ($orderFiles as $fi => $of):
+        $ext = strtoupper(
+            pathinfo($of["name"], PATHINFO_EXTENSION),
+        ); ?><a href="../download.php?id=<?= (int) $o[
+            "id"
+        ] ?>&file=<?= (int) $fi ?>" class="btn small outline" style="gap:5px;padding:5px 10px;font-size:12px;margin:2px 0"><?= icon(
+            "file-text",
+        ) ?> <span><?= e($ext) ?></span> <?= icon("download") ?></a><?php
+    endforeach;
 endif; ?></td><td><?php if (
     $o["order_type"] === "Emergency"
 ): ?><span class="tag emergency-tag"><?= icon(
