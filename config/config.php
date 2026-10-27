@@ -1,11 +1,11 @@
 <?php
 // Smart Campus configuration
-define('MONGO_URI', 'mongodb://localhost:27017');
+define('MONGO_URI', 'mongodb+srv://tenysonben94_db_user:L9PE87hTEdXwZHhw@cluster0.bqfnzts.mongodb.net/?retryWrites=true&w=majority');
 define('MONGO_DB', 'smart_campus');
 
 // Razorpay (Test Keys)
-define('RAZORPAY_KEY_ID', 'rzp_test_TYjsCgr5vGMuXr');
-define('RAZORPAY_KEY_SECRET', 'JHE8lgEoCbySrLJblAHKZxxI');
+define('RAZORPAY_KEY_ID', 'rzp_test_TsxUsYz947ciZc');
+define('RAZORPAY_KEY_SECRET', '7PtrNcQ70ASIZSKtrh8ejwLg');
 define('RAZORPAY_API_URL', 'https://api.razorpay.com/v1');
 define('APP_URL', 'http://localhost/smart');
 

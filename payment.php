@@ -239,27 +239,62 @@ curl_setopt_array($ch, [
 ]);
 
 $resp = curl_exec($ch);
-
-$http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
+$http = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curl_error = curl_error($ch);
 
-curl_close($ch);
+// PHP 8.5: curl_close() is no longer needed.
 
 // =====================================================
 // RAZORPAY RESPONSE
 // =====================================================
 
-$rzp = json_decode($resp, true);
+$rzp = is_string($resp) ? json_decode($resp, true) : null;
 
-if (!$rzp || !isset($rzp["id"])) {
-    die(
-        "Payment gateway error. " .
-            "Please check Razorpay configuration and try again."
+// TEMPORARY RAZORPAY DEBUG LOG.
+// Remove this block and delete razorpay-debug.log after troubleshooting.
+$debugLog = [
+    "time" => date("Y-m-d H:i:s"),
+    "http_status" => $http,
+    "curl_error" => $curl_error,
+    "response" => is_string($resp) ? $resp : null,
+];
+
+$debugJson = json_encode(
+    $debugLog,
+    JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE
+);
+
+if (is_string($debugJson)) {
+    file_put_contents(
+        __DIR__ . DIRECTORY_SEPARATOR . "razorpay-debug.log",
+        $debugJson . PHP_EOL . "--------------------" . PHP_EOL,
+        FILE_APPEND | LOCK_EX
     );
 }
 
-$razorpay_order_id = $rzp["id"];
+
+if (!is_array($rzp) || empty($rzp["id"])) {
+    if ($curl_error !== "") {
+        $detail = "cURL error: " . $curl_error;
+    } else {
+        $api_message = is_array($rzp)
+            ? ($rzp["error"]["description"] ?? $rzp["error"]["reason"] ?? "Unknown Razorpay API error")
+            : "Razorpay returned an empty or invalid JSON response";
+
+        $detail = "HTTP " . $http . ": " . $api_message;
+    }
+
+    // Keep diagnostic details in the server log, not in the public page.
+    error_log("Razorpay order creation failed: " . $detail);
+
+    http_response_code(502);
+    exit(
+        "Payment gateway error. Please check the Razorpay test-mode configuration " .
+        "and try again. If the problem continues, check the PHP error log."
+    );
+}
+
+$razorpay_order_id = (string) $rzp["id"];
 
 // =====================================================
 // SAVE PAYMENT TRANSACTION

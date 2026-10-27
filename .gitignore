@@ -1,1 +1,8 @@
+@"
+.env
+.env.*
+!.env.example
 vendor/
+.git
+razorpay-debug.log
+"@ | Set-Content .gitignore

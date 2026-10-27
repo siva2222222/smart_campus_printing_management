@@ -26,19 +26,32 @@ if (session_status() === PHP_SESSION_NONE) {
 // MONGODB CONNECTION
 // =====================================================
 
-try {
-    $client = new MongoDB\Client(MONGO_URI);
-
-    $conn = $client->selectDatabase(MONGO_DB);
-
-    // Force connection/test
-    $conn->command([
-        "ping" => 1,
-    ]);
-} catch (Throwable $e) {
-    die("MongoDB connection error: " . e($e->getMessage()));
+// HTML escape function must be defined first
+if (!function_exists('e')) {
+    function e($value): string
+    {
+        return htmlspecialchars(
+            (string) $value,
+            ENT_QUOTES,
+            'UTF-8'
+        );
+    }
 }
 
+// MongoDB connection
+try {
+    $client = new MongoDB\Client(MONGO_URI);
+    $conn = $client->selectDatabase(MONGO_DB);
+
+    // Test the connection
+    $conn->command(['ping' => 1]);
+
+} catch (Throwable $exception) {
+    die(
+        "MongoDB connection error: " .
+        e($exception->getMessage())
+    );
+}
 // =====================================================
 // HTML ESCAPE
 // =====================================================
