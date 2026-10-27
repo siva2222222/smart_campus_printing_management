@@ -1,19 +1,22 @@
 <?php
+// Start the session before loading any files that might produce output.
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+// =====================================================
+// COMPOSER
+// =====================================================
+
 require_once __DIR__ . "/vendor/autoload.php";
+
+// =====================================================
+// CONFIG
+// =====================================================
+
 require_once __DIR__ . "/config/config.php";
+
 require_once __DIR__ . "/partials/icons.php";
-
-// =====================================================
-// SESSION
-// =====================================================
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 // =====================================================
 // MONGODB CONNECTION
@@ -45,17 +48,6 @@ try {
         e($exception->getMessage())
     );
 }
-// =====================================================
-// HTML ESCAPE
-// =====================================================
-
-if (!function_exists("e")) {
-    function e($value)
-    {
-        return htmlspecialchars((string) $value, ENT_QUOTES, "UTF-8");
-    }
-}
-
 // =====================================================
 // LOGIN
 // =====================================================
@@ -412,5 +404,3 @@ try {
     // Do not stop the entire application
     // if an index already exists.
 }
-
-?>
