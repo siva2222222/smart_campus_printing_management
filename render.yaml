@@ -1,0 +1,16 @@
+
+services:
+  - type: web
+    name: smart-campus
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DB
+        value: smart_campus
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
