@@ -1,17 +1,5 @@
-
 <?php
-require_once "database.php";
-
-/*
- * Escape output safely for HTML.
- * This fixes: Call to undefined function e()
- */
-if (!function_exists("e")) {
-    function e($value)
-    {
-        return htmlspecialchars((string) $value, ENT_QUOTES, "UTF-8");
-    }
-}
+require_once __DIR__ . "/database.php";
 
 if (isset($_SESSION["user_id"])) {
     header("Location: dashboard.php");
